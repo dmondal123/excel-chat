@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from typing import Dict, Any
 import os
 
@@ -51,6 +52,10 @@ class ChatToExcelApp:
             st.session_state.plot_suggestion = None
         if 'current_plot' not in st.session_state:
             st.session_state.current_plot = None
+        if 'show_payment_optimization' not in st.session_state:
+            st.session_state.show_payment_optimization = False
+        if 'optimization_result' not in st.session_state:
+            st.session_state.optimization_result = None
     
     def _restore_data_from_session_state(self):
         """Restore data from session state if it exists"""
@@ -161,14 +166,18 @@ class ChatToExcelApp:
         # Sidebar
         self._display_sidebar()
         
-        # Main content area
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            self._display_chat_interface()
-        
-        with col2:
-            self._display_data_info()
+        # Check if payment optimization is active
+        if st.session_state.show_payment_optimization:
+            self._display_payment_optimization_interface()
+        else:
+            # Main content area
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                self._display_chat_interface()
+            
+            with col2:
+                self._display_data_info()
     
     def _display_sidebar(self):
         """Display sidebar with data information and controls"""
@@ -196,12 +205,19 @@ class ChatToExcelApp:
             if st.button("🔍 Data Quality Check"):
                 self._run_data_quality_check()
             
-            if st.button("💡 Generate Insights"):
-                self._generate_business_insights()
+            if st.button("📊 Generate Plots"):
+                self._show_plot_generator()
             
             # Plot generation interface
             if st.session_state.show_plot_interface:
                 self._display_plot_interface()
+            
+            st.markdown("---")
+            
+            # Payment Optimization section
+            st.subheader("💰 Payment Optimization")
+            if st.button("🔧 Optimize Payment Terms"):
+                self._show_payment_optimization()
     
     def _display_plot_interface(self):
         """Display plot generation interface in sidebar"""
@@ -476,6 +492,365 @@ class ChatToExcelApp:
         except Exception as e:
             st.error(f"Error generating insights: {str(e)}")
     
+    def _show_plot_generator(self):
+        """Show simple plot generation interface"""
+        st.session_state.show_plot_interface = True
+        st.session_state.plot_suggestion = {
+            'success': True,
+            'suggestion': 'Plot generator activated! Configure your visualization in the sidebar.'
+        }
+        st.rerun()
+    
+    def _show_payment_optimization(self):
+        """Show payment optimization interface"""
+        st.session_state.show_payment_optimization = True
+        st.rerun()
+    
+    def _display_payment_optimization_interface(self):
+        """Display payment optimization interface"""
+        st.header("💰 Payment Terms Optimization")
+        
+        # Back button
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("← Back to Chat"):
+                st.session_state.show_payment_optimization = False
+                st.rerun()
+        
+        with col2:
+            st.markdown("**Optimize payment terms to maximize cash inventory improvement**")
+        
+        st.markdown("---")
+        
+        # Input section
+        st.subheader("📊 Configuration")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            target_avg = st.number_input(
+                "Target Average Payment Term (days):",
+                min_value=30.0,
+                max_value=60.0,
+                value=44.0,
+                step=0.1,
+                help="The desired average of all target payment terms"
+            )
+        
+        with col2:
+            st.info(f"**Current Range:** 30-60 days\n**Your Target:** {target_avg} days")
+        
+        # Optimization button
+        if st.button("🚀 Run Optimization", key="run_optimization"):
+            with st.spinner("Running payment term optimization..."):
+                result = self._run_payment_optimization(target_avg)
+                if result is not None and not result.empty:
+                    st.session_state.optimization_result = result
+                    st.success("✅ Optimization completed!")
+                else:
+                    st.error("❌ Optimization failed or returned empty results")
+        
+        # Display results
+        if st.session_state.optimization_result is not None:
+            try:
+                self._display_optimization_results()
+            except Exception as display_error:
+                st.error(f"Error displaying results: {str(display_error)}")
+                st.write("Debug: Optimization result type:", type(st.session_state.optimization_result))
+                st.write("Debug: Optimization result shape:", getattr(st.session_state.optimization_result, 'shape', 'No shape attribute'))
+    
+    def _run_payment_optimization(self, target_avg: float):
+        """Run the payment optimization algorithm"""
+        try:
+            import numpy as np
+            import re
+            
+            # Get the data
+            data = self.excel_handler.data
+            
+            # Check for specific required columns
+            payment_desc_col = 'Pmt DescriptionDis'
+            vendor_col = 'Vendor Name' 
+            amount_col = 'Amount in Local Currency'
+            
+            missing_cols = []
+            if payment_desc_col not in data.columns:
+                missing_cols.append(payment_desc_col)
+            if vendor_col not in data.columns:
+                missing_cols.append(vendor_col)
+            if amount_col not in data.columns:
+                missing_cols.append(amount_col)
+            
+            if missing_cols:
+                st.error("❌ Required columns not found:")
+                for col in missing_cols:
+                    st.write(f"- Missing: **{col}**")
+                st.write(f"Available columns: {list(data.columns)}")
+                return None
+            
+            # Function to extract payment terms from text
+            def extract_payment_terms(desc_text):
+                """Extract payment terms from description text"""
+                if pd.isna(desc_text):
+                    return None
+                
+                # Look for patterns like "30 days", "21 Days", "within 30 days", etc.
+                patterns = [
+                    r'within\s+(\d+)\s+days',
+                    r'(\d+)\s+days',
+                    r'(\d+)\s+Days',
+                    r'Payment\s+within\s+(\d+)',
+                    r'(\d+)\s*day',
+                ]
+                
+                text = str(desc_text).lower()
+                for pattern in patterns:
+                    match = re.search(pattern, text)
+                    if match:
+                        days = int(match.group(1))
+                        # Map to valid terms, closest match
+                        valid_terms = [0, 7, 15, 21, 30]
+                        return min(valid_terms, key=lambda x: abs(x - days))
+                
+                return None
+            
+            # Extract payment terms from descriptions
+            data_copy = data.copy()
+            data_copy['extracted_payment_terms'] = data_copy[payment_desc_col].apply(extract_payment_terms)
+            
+            # Filter out rows where we couldn't extract payment terms
+            data_filtered = data_copy[data_copy['extracted_payment_terms'].notna()].copy()
+            
+            if data_filtered.empty:
+                st.error("❌ Could not extract payment terms from the description column.")
+                st.write("Sample descriptions found:")
+                sample_descriptions = data[payment_desc_col].dropna().head(5)
+                for desc in sample_descriptions:
+                    st.write(f"- {desc}")
+                return None
+            
+            # Group data by extracted payment terms
+            valid_terms = [0, 7, 15, 21, 30]
+            
+            try:
+                grouped = data_filtered.groupby('extracted_payment_terms').agg({
+                    vendor_col: 'count',  # Count vendors (transactions)
+                    amount_col: 'sum'     # Sum amounts
+                }).reset_index()
+                
+                # Rename columns for clarity
+                grouped = grouped.rename(columns={
+                    'extracted_payment_terms': 'current_payment_terms',
+                    vendor_col: 'vendor_count',
+                    amount_col: 'total_amount'
+                })
+                
+                st.info(f"🔧 Debug: Grouped data shape: {grouped.shape}")
+                
+            except Exception as group_error:
+                st.error(f"Error during grouping: {str(group_error)}")
+                return None
+            
+            # Ensure all payment terms are present (even if zero)
+            for term in valid_terms:
+                if term not in grouped['current_payment_terms'].values:
+                    new_row = pd.DataFrame({
+                        'current_payment_terms': [term],
+                        'vendor_count': [0],
+                        'total_amount': [0.0]
+                    })
+                    grouped = pd.concat([grouped, new_row], ignore_index=True)
+            
+            grouped = grouped.sort_values('current_payment_terms').reset_index(drop=True)
+            
+            st.info(f"📊 Extracted payment terms from {len(data_filtered)} transactions")
+            st.write("Payment terms distribution:")
+            for _, row in grouped.iterrows():
+                st.write(f"- {int(row['current_payment_terms'])} days: {int(row['vendor_count'])} transactions, ₹{abs(row['total_amount']):,.0f}")
+            
+            # Apply the optimization algorithm from test.py
+            current_terms = grouped['current_payment_terms'].to_numpy(float)
+            vendors = grouped['vendor_count'].to_numpy(float)
+            amounts = np.abs(grouped['total_amount'].to_numpy(float))  # Use absolute values
+            
+            # Algorithm parameters
+            try:
+                U = 60.0  # Upper limit
+                L = 30.0  # Lower limit
+                K = target_avg * vendors.sum()  # Target constraint
+                
+                st.info(f"🔧 Debug: Algorithm params - U:{U}, L:{L}, K:{K:.2f}")
+                
+                # Calculate priority ratios
+                ratio = amounts / np.maximum(vendors, 1)  # Avoid division by zero
+                order = np.argsort(-ratio)
+                
+                # Initialize with minimum values
+                x = np.full(len(grouped), L)
+                need = K - (vendors * x).sum()
+                
+                st.info(f"🔧 Debug: Initial need: {need:.2f}")
+                
+                # Distribute additional payment days based on priority
+                for i in order:
+                    if vendors[i] > 0 and need > 1e-9:  # Only consider groups with vendors and remaining need
+                        cap = (U - x[i]) * vendors[i]
+                        take = min(cap, need)
+                        if take > 0:
+                            x[i] += take / vendors[i]
+                            need -= take
+                        if need <= 1e-9:
+                            break
+                
+                st.info(f"🔧 Debug: Final need: {need:.2f}")
+                
+            except Exception as algo_error:
+                st.error(f"Error in optimization algorithm: {str(algo_error)}")
+                return None
+            
+            # Create the optimized DataFrame
+            result_df = pd.DataFrame({
+                'Vendors': vendors.astype(int),
+                'Current Payment Terms': current_terms.astype(int),
+                'Target Payment Term': np.round(x, 2),
+                'Total Purchase Value  July 25 against the Vendors (INR)': amounts,
+            })
+            
+            # Debug: Check for any issues
+            st.info(f"🔧 Debug: Created result DataFrame with shape {result_df.shape}")
+            
+            # Calculate additional columns
+            try:
+                result_df['Product of \n(Total Purchase  Value x Old Payment Terms) -INR'] = (
+                    result_df['Current Payment Terms'] * result_df['Total Purchase Value  July 25 against the Vendors (INR)']
+                )
+                
+                result_df['Product of \n(Total Purchase Value  x Target (New) Payment Terms) INR'] = (
+                    result_df['Target Payment Term'] * result_df['Total Purchase Value  July 25 against the Vendors (INR)']
+                )
+                
+                result_df['WAPT Present '] = result_df['Current Payment Terms']
+                result_df['WAPT Target'] = result_df['Target Payment Term']
+                result_df['Change - WAPT '] = result_df['WAPT Target'] - result_df['WAPT Present ']
+                result_df['Accounts Payable per Day'] = result_df['Total Purchase Value  July 25 against the Vendors (INR)'] / 30
+                result_df['Improvement in Cash Inventory (CF) on Improvement  of WAPT'] = (
+                    result_df['Change - WAPT '] * result_df['Accounts Payable per Day']
+                )
+                result_df['Interest Income foregone on Cash Inventory (CF) @ 5.15% P.A'] = (
+                    result_df['Improvement in Cash Inventory (CF) on Improvement  of WAPT'] * 0.0515
+                )
+                
+                st.info(f"✅ Successfully calculated all columns")
+                
+            except Exception as calc_error:
+                st.error(f"Error calculating additional columns: {str(calc_error)}")
+                return None
+            
+            return result_df
+            
+        except Exception as e:
+            st.error(f"Error running optimization: {str(e)}")
+            return None
+    
+    def _display_optimization_results(self):
+        """Display optimization results and download option"""
+        st.subheader("📊 Optimization Results")
+        
+        result_df = st.session_state.optimization_result
+        
+        # Display summary metrics
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            actual_avg = (result_df['Target Payment Term'] * result_df['Vendors']).sum() / result_df['Vendors'].sum()
+            st.metric("Achieved Average", f"{actual_avg:.2f} days")
+        
+        with col2:
+            total_improvement = result_df['Improvement in Cash Inventory (CF) on Improvement  of WAPT'].sum()
+            st.metric("Total CF Improvement", f"₹{total_improvement:,.0f}")
+        
+        with col3:
+            total_interest = result_df['Interest Income foregone on Cash Inventory (CF) @ 5.15% P.A'].sum()
+            st.metric("Annual Interest Income", f"₹{total_interest:,.0f}")
+        
+        with col4:
+            max_change = result_df['Change - WAPT '].max()
+            st.metric("Max Term Increase", f"{max_change:.1f} days")
+        
+        # Display the full table
+        st.subheader("📋 Detailed Results")
+        
+        try:
+            # Clean the DataFrame for display
+            display_df = result_df.copy()
+            
+            # Ensure all numeric columns are properly typed
+            numeric_columns = [
+                'Vendors', 'Current Payment Terms', 'Target Payment Term',
+                'Total Purchase Value  July 25 against the Vendors (INR)',
+                'WAPT Present ', 'WAPT Target', 'Change - WAPT ',
+                'Accounts Payable per Day',
+                'Improvement in Cash Inventory (CF) on Improvement  of WAPT',
+                'Interest Income foregone on Cash Inventory (CF) @ 5.15% P.A'
+            ]
+            
+            for col in numeric_columns:
+                if col in display_df.columns:
+                    display_df[col] = pd.to_numeric(display_df[col], errors='coerce')
+            
+            # Round numeric columns for better display
+            display_df = display_df.round(2)
+            
+            st.dataframe(display_df, use_container_width=True)
+            
+        except Exception as display_error:
+            st.error(f"Error displaying results table: {str(display_error)}")
+            st.write("Raw results:")
+            st.write(result_df)
+        
+        # Download options
+        st.subheader("💾 Export Results")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            try:
+                # CSV download
+                csv = result_df.to_csv(index=False)
+                st.download_button(
+                    label="📄 Download as CSV",
+                    data=csv,
+                    file_name="optimized_payment_terms.csv",
+                    mime="text/csv"
+                )
+            except Exception as csv_error:
+                st.error(f"CSV download error: {str(csv_error)}")
+        
+        with col2:
+            try:
+                # Excel download
+                import io
+                buffer = io.BytesIO()
+                
+                # Clean DataFrame for Excel export
+                excel_df = result_df.copy()
+                
+                # Ensure all data is serializable
+                for col in excel_df.columns:
+                    if excel_df[col].dtype == 'object':
+                        excel_df[col] = excel_df[col].astype(str)
+                
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    excel_df.to_excel(writer, sheet_name='Optimized Payment Terms', index=False)
+                
+                st.download_button(
+                    label="📊 Download as Excel",
+                    data=buffer.getvalue(),
+                    file_name="optimized_payment_terms.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            except Exception as excel_error:
+                st.error(f"Excel download error: {str(excel_error)}")
+    
     def _reset_application(self):
         """Reset application state"""
         st.session_state.data_loaded = False
@@ -486,6 +861,8 @@ class ChatToExcelApp:
         st.session_state.show_plot_interface = False
         st.session_state.plot_suggestion = None
         st.session_state.current_plot = None
+        st.session_state.show_payment_optimization = False
+        st.session_state.optimization_result = None
         
         # Reset handlers
         self.excel_handler = ExcelHandler()
