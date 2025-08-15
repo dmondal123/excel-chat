@@ -68,40 +68,7 @@ class LLMHandler:
         except Exception as e:
             return f"Error generating response: {str(e)}"
     
-    def generate_payment_summary(self, payment_data: str, payment_number: str) -> str:
-        """Generate summary for specific payment number using dedicated prompt"""
-        try:
-            if not self.client:
-                return "LLM client not initialized. Please check your API key."
-            
-            # Use dedicated payment summary prompt
-            system_prompt = PromptTemplates.get_payment_summary_prompt()
-            
-            user_message = f"""
-            Payment Number: {payment_number}
-            
-            Data for this payment:
-            {payment_data}
-            
-            Please generate a comprehensive summary table for this payment.
-            """
-            
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ]
-            
-            response = self.client.chat.completions.create(
-                model=Config.DEFAULT_MODEL,
-                messages=messages,
-                max_tokens=Config.MAX_TOKENS,
-                temperature=0.3  # Lower temperature for more consistent summaries
-            )
-            
-            return response.choices[0].message.content
-            
-        except Exception as e:
-            return f"Error generating payment summary: {str(e)}"
+
     
     def generate_plot_suggestion(self, user_request: str, data_context: str) -> Dict[str, Any]:
         """Generate plot suggestions based on user request"""

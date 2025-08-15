@@ -29,9 +29,15 @@ class SimpleSQLHandler:
     def is_analytical_query(self, query: str) -> bool:
         """Simple check if query needs SQL analysis"""
         analytical_keywords = [
+            # Basic analytics
             'average', 'avg', 'sum', 'count', 'max', 'min', 'total',
             'group', 'filter', 'where', 'top', 'bottom', 'highest', 'lowest',
-            'trend', 'compare', 'between', 'greater', 'less', 'most', 'least'
+            'trend', 'compare', 'between', 'greater', 'less', 'most', 'least',
+            # Accounting-specific terms
+            'balance', 'outstanding', 'overdue', 'due', 'paid', 'unpaid',
+            'vendor', 'account', 'document', 'amount', 'currency',
+            'aging', 'reconcile', 'clearing', 'posting', 'by month', 'by date',
+            'net due', 'terms', 'payment terms', 'invoice', 'credit', 'debit'
         ]
         
         query_lower = query.lower()

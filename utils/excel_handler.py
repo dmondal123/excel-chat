@@ -11,7 +11,6 @@ class ExcelHandler:
         self.data = None
         self.filename = None
         self.columns = []
-        self.payment_numbers = []
         
     def upload_and_process_file(self, uploaded_file) -> bool:
         """
@@ -37,9 +36,6 @@ class ExcelHandler:
             self.filename = uploaded_file.name
             self.columns = list(self.data.columns)
             
-            # Extract payment numbers (assuming there's a payment column)
-            self._extract_payment_numbers()
-            
             st.success(f"Successfully loaded {self.filename}")
             return True
             
@@ -55,18 +51,7 @@ class ExcelHandler:
         """Validate file size"""
         return uploaded_file.size <= Config.MAX_FILE_SIZE_MB * 1024 * 1024
     
-    def _extract_payment_numbers(self):
-        """Extract unique payment numbers from the data"""
-        # Look for payment-related columns
-        payment_columns = [col for col in self.columns if 'payment' in col.lower() or 'pay' in col.lower()]
-        
-        if payment_columns:
-            # Use the first payment column found
-            payment_col = payment_columns[0]
-            self.payment_numbers = sorted(self.data[payment_col].dropna().unique().tolist())
-        else:
-            # If no payment column found, use index as payment numbers
-            self.payment_numbers = list(range(1, len(self.data) + 1))
+
     
     def get_data_preview(self, rows: int = 10) -> pd.DataFrame:
         """Get data preview with specified number of rows"""
@@ -94,23 +79,7 @@ class ExcelHandler:
         
         return self.data.describe()
     
-    def filter_by_payment_number(self, payment_number) -> pd.DataFrame:
-        """Filter data by payment number"""
-        if self.data is None:
-            return pd.DataFrame()
-        
-        # Find payment column
-        payment_columns = [col for col in self.columns if 'payment' in col.lower() or 'pay' in col.lower()]
-        
-        if payment_columns:
-            payment_col = payment_columns[0]
-            return self.data[self.data[payment_col] == payment_number]
-        else:
-            # If no payment column, return row by index
-            try:
-                return self.data.iloc[[payment_number - 1]]
-            except IndexError:
-                return pd.DataFrame()
+
     
     def get_context_for_llm(self) -> str:
         """Generate context string for LLM about the Excel data"""

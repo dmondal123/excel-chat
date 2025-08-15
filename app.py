@@ -36,10 +36,7 @@ class ChatToExcelApp:
             st.session_state.data_loaded = False
         if 'chat_history' not in st.session_state:
             st.session_state.chat_history = []
-        if 'selected_payment' not in st.session_state:
-            st.session_state.selected_payment = None
-        if 'show_payment_summary' not in st.session_state:
-            st.session_state.show_payment_summary = False
+
     
     def run(self):
         """Main application entry point"""
@@ -67,7 +64,7 @@ class ChatToExcelApp:
         
         col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
-            st.markdown("**Upload your Excel file and start chatting with your data!**")
+            st.markdown("**Upload your accounting/financial Excel file and start analyzing your data!**")
         with col2:
             if st.session_state.data_loaded:
                 if st.button("🗑️ Clear Data"):
@@ -110,11 +107,11 @@ class ChatToExcelApp:
         """Display expected Excel format"""
         st.markdown("### 📋 Expected Excel Format")
         st.info("""
-        For best results, your Excel file should contain:
+        For best results, your accounting/financial Excel file should contain:
         - **Headers in the first row**
-        - **Payment-related column** (payment_id, payment_number, etc.)
-        - **Numerical data** for analysis
-        - **Date columns** in standard format
+        - **Amount in Local Currency** (for financial analysis)
+        - **Vendor Name and Account** columns
+        - **Date columns** (Document Date, Posting Date, Net Due Date)
         - **Clean data** without merged cells
         """)
     
@@ -131,7 +128,6 @@ class ChatToExcelApp:
         
         with col2:
             self._display_data_info()
-            self._display_payment_summary_section()
     
     def _display_sidebar(self):
         """Display sidebar with data information and controls"""
@@ -206,27 +202,7 @@ class ChatToExcelApp:
             stats = self.excel_handler.get_statistics()
             st.dataframe(stats)
     
-    def _display_payment_summary_section(self):
-        """Display payment summary section"""
-        st.header("💳 Payment Summary")
-        
-        # Payment number selector
-        if self.excel_handler.payment_numbers:
-            selected_payment = st.selectbox(
-                "Select Payment Number:",
-                options=self.excel_handler.payment_numbers,
-                key="payment_selector"
-            )
-            
-            if st.button("Generate Summary", key="generate_summary"):
-                self._generate_payment_summary(selected_payment)
-            
-            # Display summary if generated
-            if st.session_state.get('payment_summary'):
-                st.markdown("### Summary Report")
-                st.markdown(st.session_state.payment_summary)
-        else:
-            st.info("No payment numbers detected. Please ensure your Excel file has a payment-related column.")
+
     
     def _handle_plot_request(self, user_request: str):
         """Handle user request for creating plots"""
@@ -342,30 +318,7 @@ class ChatToExcelApp:
         except Exception as e:
             st.error(f"Error creating plot: {str(e)}")
     
-    def _generate_payment_summary(self, payment_number):
-        """Generate summary for selected payment"""
-        try:
-            # Filter data for selected payment
-            payment_data = self.excel_handler.filter_by_payment_number(payment_number)
-            
-            if not payment_data.empty:
-                # Convert to string for LLM processing
-                payment_data_str = payment_data.to_string()
-                
-                # Generate summary using dedicated prompt
-                summary = self.llm_handler.generate_payment_summary(
-                    payment_data_str, 
-                    str(payment_number)
-                )
-                
-                st.session_state.payment_summary = summary
-                st.session_state.selected_payment = payment_number
-                st.rerun()
-            else:
-                st.error(f"No data found for payment number: {payment_number}")
-                
-        except Exception as e:
-            st.error(f"Error generating payment summary: {str(e)}")
+
     
     def _display_statistics(self):
         """Display statistical analysis"""
@@ -410,10 +363,6 @@ class ChatToExcelApp:
         """Reset application state"""
         st.session_state.data_loaded = False
         st.session_state.chat_history = []
-        st.session_state.selected_payment = None
-        st.session_state.show_payment_summary = False
-        if 'payment_summary' in st.session_state:
-            del st.session_state.payment_summary
         
         # Reset handlers
         self.excel_handler = ExcelHandler()

@@ -1,17 +1,18 @@
 # Chat to Excel 📊
 
-A powerful Streamlit application that lets you chat with your Excel data using Large Language Models (LLMs). Upload an Excel file, ask questions about your data, generate visualizations, and get AI-powered insights.
+A powerful Streamlit application that lets you chat with your accounting and financial Excel data using Large Language Models (LLMs). Upload financial transaction files, ask questions about vendor payments, generate insights, and analyze payment patterns.
 
-**Powered by Groq** for lightning-fast inference and cost-effective analysis.
+**Powered by Groq** for lightning-fast inference and cost-effective financial analysis.
+
+**Optimized for accounting/financial data** including vendor payments, document analysis, and accounts payable reporting.
 
 ## ✨ Features
 
 ### 🔄 Core Functionality
-- **Excel File Upload**: Support for `.xlsx` and `.xls` files
-- **Interactive Chat**: Natural language queries about your data
-- **Payment Analysis**: Dedicated payment number selection and summary generation
-- **Data Visualization**: AI-suggested plots and charts
-- **Business Insights**: Automated analysis and recommendations
+- **Financial Excel Upload**: Support for `.xlsx` and `.xls` accounting files
+- **Interactive Chat**: Natural language queries about financial transactions
+- **Financial Visualization**: AI-suggested plots and charts for accounting data
+- **Accounting Insights**: Automated vendor analysis, aging reports, and payment recommendations
 
 ### 📊 Visualization Types
 - Bar Charts
@@ -23,11 +24,11 @@ A powerful Streamlit application that lets you chat with your Excel data using L
 - Pie Charts
 - Area Charts
 
-### 💳 Payment Features
-- Payment number extraction and selection
-- Dedicated payment summary generation using specialized prompts
-- Financial analysis and risk assessment
-- Transaction pattern identification
+### 💳 Financial Features
+- Intelligent data analysis using hybrid SQL + context approach
+- Financial analysis and risk assessment through natural language
+- Transaction pattern identification via chat interface
+- Automated aging reports and vendor analysis
 
 ## 🚀 Quick Start
 
@@ -127,21 +128,18 @@ You can customize the application by modifying:
 ### 3. Chat with Your Data
 - Type natural language questions in the chat interface
 - Examples:
-  - "What are the trends in payment amounts?"
-  - "Show me a chart of monthly transactions"
-  - "Which payment method is most common?"
+  - "What are the trends in payment amounts by vendor?"
+  - "Show me overdue invoices past the net due date"
+  - "Which vendors have the highest outstanding balances?"
+  - "Create a chart of document types by month"
+  - "Analyze payment terms across different accounts"
 
 ### 4. Generate Visualizations
 - Request plots using natural language
 - Choose from multiple chart types
 - Export plots as HTML or PNG files
 
-### 5. Payment Analysis
-- Select a payment number from the dropdown
-- Click "Generate Summary" for detailed analysis
-- View structured payment information and insights
-
-### 6. Quick Actions
+### 5. Quick Actions
 - **Show Statistics**: Display descriptive statistics
 - **Data Quality Check**: Identify missing values and data issues
 - **Generate Insights**: Get AI-powered business recommendations
@@ -157,11 +155,13 @@ For optimal results, ensure your Excel file has:
 - **Numerical columns** for statistical analysis
 - **Date columns** in standard format (YYYY-MM-DD or similar)
 
-### 📋 Example Column Names
-- Payment-related: `payment_id`, `payment_number`, `transaction_id`
-- Financial: `amount`, `fee`, `total`, `balance`
-- Temporal: `date`, `timestamp`, `created_at`
-- Categorical: `status`, `method`, `category`, `type`
+### 📋 Supported Column Types (Your Data)
+- Document identification: `Document Number`, `Document Type`, `Reference`
+- Financial: `Amount in Local Currency`, `Local Currency`, `Terms of Payment`
+- Vendor: `Vendor Name`, `Account`, `Offsetting Account`
+- Temporal: `Document Date`, `Posting Date`, `Net Due Date`, `Clearing Date`
+- Processing: `User Name`, `Assignment`, `Clearing Document`, `Special G/L Ind.`
+- Additional: `Text`, `Purchasing Document`, `Pmt DescriptionDis`
 
 ## 🔧 Advanced Features
 
