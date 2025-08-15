@@ -115,7 +115,7 @@ class LLMHandler:
                 return "Error: LLM client not initialized"
             
             messages = [
-                {"role": "system", "content": "You are a SQL expert. Generate only valid SQL queries."},
+                {"role": "system", "content": "You are a SQL expert. Return ONLY raw SQL queries with no additional text, explanations, or formatting."},
                 {"role": "user", "content": sql_prompt}
             ]
             
@@ -128,12 +128,31 @@ class LLMHandler:
             
             sql_query = response.choices[0].message.content.strip()
             
-            # Clean up the response - remove markdown formatting if present
-            if sql_query.startswith('```'):
-                sql_query = sql_query.split('\n')[1:-1]
-                sql_query = '\n'.join(sql_query)
+            # Comprehensive cleanup of the response
+            # Remove markdown code blocks
+            if sql_query.startswith('```sql') or sql_query.startswith('```'):
+                lines = sql_query.split('\n')
+                # Remove first and last lines if they contain ```
+                if lines[0].startswith('```'):
+                    lines = lines[1:]
+                if len(lines) > 0 and lines[-1].strip() == '```':
+                    lines = lines[:-1]
+                sql_query = '\n'.join(lines).strip()
             
-            return sql_query
+            # Remove common prefixes
+            prefixes_to_remove = [
+                'SQL:', 'Query:', 'SELECT:', 'sql:', 'query:', 'SELECT query:', 'SQL query:'
+            ]
+            for prefix in prefixes_to_remove:
+                if sql_query.startswith(prefix):
+                    sql_query = sql_query[len(prefix):].strip()
+            
+            # Remove any trailing semicolon explanation text
+            if ';' in sql_query:
+                # Keep only up to the first semicolon
+                sql_query = sql_query.split(';')[0] + ';'
+            
+            return sql_query.strip()
             
         except Exception as e:
             return f"Error generating SQL: {str(e)}"

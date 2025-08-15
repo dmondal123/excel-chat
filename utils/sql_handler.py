@@ -52,7 +52,9 @@ class SimpleSQLHandler:
         for col in self.df.columns:
             dtype = str(self.df[col].dtype)
             sample_vals = self.df[col].dropna().head(2).tolist()
-            columns_info.append(f"  {col} ({dtype}) - examples: {sample_vals}")
+            # Use square brackets to properly quote column names with spaces
+            quoted_col = f"[{col}]" if ' ' in str(col) else str(col)
+            columns_info.append(f"  {quoted_col} ({dtype}) - examples: {sample_vals}")
         
         schema = f"""
 Table: {self.table_name}
@@ -60,6 +62,8 @@ Columns:
 {chr(10).join(columns_info)}
 
 Total rows: {len(self.df)}
+
+IMPORTANT: Column names with spaces must be enclosed in square brackets like [Column Name].
 """
         return schema
     
@@ -79,9 +83,10 @@ Rules:
 - Keep query simple and safe
 - Use LIMIT 100 for large results
 - Only use SELECT statements
-- Return only the SQL query, no explanation
+- Column names with spaces MUST be in square brackets: [Column Name]
+- Return ONLY the raw SQL query with NO additional text, explanations, or formatting
 
-SQL:"""
+"""
         return prompt
     
     def execute_sql_query(self, sql_query: str) -> Optional[pd.DataFrame]:

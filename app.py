@@ -29,6 +29,9 @@ class ChatToExcelApp:
         
         # Initialize session state
         self._initialize_session_state()
+        
+        # Restore data if it exists in session state
+        self._restore_data_from_session_state()
     
     def _initialize_session_state(self):
         """Initialize Streamlit session state variables"""
@@ -36,6 +39,39 @@ class ChatToExcelApp:
             st.session_state.data_loaded = False
         if 'chat_history' not in st.session_state:
             st.session_state.chat_history = []
+        if 'excel_data' not in st.session_state:
+            st.session_state.excel_data = None
+        if 'excel_filename' not in st.session_state:
+            st.session_state.excel_filename = None
+        if 'excel_columns' not in st.session_state:
+            st.session_state.excel_columns = []
+        if 'show_plot_interface' not in st.session_state:
+            st.session_state.show_plot_interface = False
+        if 'plot_suggestion' not in st.session_state:
+            st.session_state.plot_suggestion = None
+        if 'current_plot' not in st.session_state:
+            st.session_state.current_plot = None
+    
+    def _restore_data_from_session_state(self):
+        """Restore data from session state if it exists"""
+        if st.session_state.data_loaded and st.session_state.excel_data is not None:
+            # Restore Excel handler data
+            self.excel_handler.data = st.session_state.excel_data
+            self.excel_handler.filename = st.session_state.excel_filename
+            self.excel_handler.columns = st.session_state.excel_columns
+            
+            # Restore LLM context
+            excel_context = self.excel_handler.get_context_for_llm()
+            self.llm_handler.set_excel_context(excel_context)
+            
+            # Restore SQL handler data (without showing debug messages again)
+            try:
+                self.sql_handler.df = st.session_state.excel_data
+                import sqlite3
+                self.sql_handler.connection = sqlite3.connect(":memory:")
+                st.session_state.excel_data.to_sql(self.sql_handler.table_name, self.sql_handler.connection, index=False, if_exists='replace')
+            except Exception as e:
+                st.error(f"Error restoring SQL data: {str(e)}")
 
     
     def run(self):
@@ -90,6 +126,11 @@ class ChatToExcelApp:
         if uploaded_file is not None:
             with st.spinner("Processing your Excel file..."):
                 if self.excel_handler.upload_and_process_file(uploaded_file):
+                    # Store data in session state for persistence
+                    st.session_state.excel_data = self.excel_handler.data
+                    st.session_state.excel_filename = self.excel_handler.filename
+                    st.session_state.excel_columns = self.excel_handler.columns
+                    
                     # Set Excel context for LLM
                     excel_context = self.excel_handler.get_context_for_llm()
                     self.llm_handler.set_excel_context(excel_context)
@@ -157,6 +198,56 @@ class ChatToExcelApp:
             
             if st.button("💡 Generate Insights"):
                 self._generate_business_insights()
+            
+            # Plot generation interface
+            if st.session_state.show_plot_interface:
+                self._display_plot_interface()
+    
+    def _display_plot_interface(self):
+        """Display plot generation interface in sidebar"""
+        st.markdown("---")
+        st.subheader("🎨 Plot Generator")
+        
+        if st.session_state.plot_suggestion:
+            # Show plot suggestion
+            st.write("**AI Suggestion:**")
+            with st.expander("💡 View Suggestion", expanded=False):
+                st.write(st.session_state.plot_suggestion.get('suggestion', ''))
+            
+            # Plot configuration
+            st.write("**Create Your Plot:**")
+            
+            plot_type = st.selectbox(
+                "Plot Type:",
+                options=self.plot_generator.supported_plot_types,
+                key="sidebar_plot_type_selector"
+            )
+            
+            x_column = st.selectbox(
+                "X-axis:",
+                options=self.excel_handler.columns,
+                key="sidebar_x_axis_selector"
+            )
+            
+            # Additional options based on plot type
+            y_column = None
+            if plot_type not in ['histogram', 'pie']:
+                y_column = st.selectbox(
+                    "Y-axis:",
+                    options=[None] + self.excel_handler.columns,
+                    key="sidebar_y_axis_selector"
+                )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🎨 Create Plot", key="sidebar_create_plot_btn"):
+                    self._create_and_display_plot(plot_type, x_column, y_column)
+            
+            with col2:
+                if st.button("❌ Close", key="close_plot_interface"):
+                    st.session_state.show_plot_interface = False
+                    st.session_state.plot_suggestion = None
+                    st.rerun()
     
     def _display_chat_interface(self):
         """Display chat interface"""
@@ -191,6 +282,34 @@ class ChatToExcelApp:
     
     def _display_data_info(self):
         """Display data preview and information"""
+        # Plot display area
+        if st.session_state.current_plot:
+            st.header("📊 Current Visualization")
+            
+            plot_data = st.session_state.current_plot
+            fig = plot_data['figure']
+            config = plot_data['config']
+            
+            # Display plot
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Plot info and controls
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.info(f"**Type:** {config['type'].title()}")
+            with col2:
+                st.info(f"**Created:** {plot_data['created_at']}")
+            with col3:
+                if st.button("📄 Export HTML", key="export_current_plot"):
+                    filepath = self.plot_generator.export_plot_as_html(fig)
+                    st.success(f"Saved: {filepath}")
+            
+            if st.button("❌ Clear Plot", key="clear_current_plot"):
+                st.session_state.current_plot = None
+                st.rerun()
+            
+            st.markdown("---")
+        
         st.header("📋 Data Preview")
         
         # Data preview
@@ -212,43 +331,27 @@ class ChatToExcelApp:
             plot_suggestion = self.llm_handler.generate_plot_suggestion(user_request, data_context)
             
             if plot_suggestion.get('success'):
-                st.write("**Plot Suggestion:**")
-                st.write(plot_suggestion['suggestion'])
+                # Store plot suggestion in session state and show interface
+                st.session_state.plot_suggestion = plot_suggestion
+                st.session_state.show_plot_interface = True
                 
-                # Simple plot generation interface
-                st.write("**Create Plot:**")
+                st.write("🎨 **Plot Request Received!**")
+                st.write("Plot suggestion generated. Please check the **Plot Generator** section in the sidebar to create your visualization.")
+                st.info("👆 The plot creation interface is now available in the sidebar to keep your chat history intact.")
                 
-                col1, col2 = st.columns(2)
-                with col1:
-                    plot_type = st.selectbox(
-                        "Plot Type:",
-                        options=self.plot_generator.supported_plot_types,
-                        key="plot_type_selector"
-                    )
+                # Add to conversation history
+                response = f"Plot request received: {user_request}\n\nPlot interface activated in sidebar."
+                st.session_state.chat_history.append({"role": "assistant", "content": response})
                 
-                with col2:
-                    x_column = st.selectbox(
-                        "X-axis:",
-                        options=self.excel_handler.columns,
-                        key="x_axis_selector"
-                    )
-                
-                # Additional options based on plot type
-                y_column = None
-                if plot_type not in ['histogram', 'pie']:
-                    y_column = st.selectbox(
-                        "Y-axis:",
-                        options=[None] + self.excel_handler.columns,
-                        key="y_axis_selector"
-                    )
-                
-                if st.button("Create Plot", key="create_plot_btn"):
-                    self._create_and_display_plot(plot_type, x_column, y_column)
             else:
-                st.error(plot_suggestion.get('error', 'Error generating plot suggestion'))
+                error_msg = plot_suggestion.get('error', 'Error generating plot suggestion')
+                st.error(error_msg)
+                st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
                 
         except Exception as e:
-            st.error(f"Error handling plot request: {str(e)}")
+            error_msg = f"Error handling plot request: {str(e)}"
+            st.error(error_msg)
+            st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
     
     def _handle_analytical_query(self, user_query: str):
         """Handle analytical queries using SQL"""
@@ -299,21 +402,35 @@ class ChatToExcelApp:
                 'type': plot_type,
                 'x': x_column,
                 'y': y_column,
-                'title': f'{plot_type.title()} Plot'
+                'title': f'{plot_type.title()} Plot: {x_column}' + (f' vs {y_column}' if y_column else '')
             }
             
             # Create plot
             fig = self.plot_generator.create_plot(self.excel_handler.data, plot_config)
             
             if fig:
-                st.plotly_chart(fig, use_container_width=True)
+                # Store plot in session state
+                st.session_state.current_plot = {
+                    'figure': fig,
+                    'config': plot_config,
+                    'created_at': pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
                 
-                # Export options
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("📄 Export as HTML", key="export_html"):
-                        filepath = self.plot_generator.export_plot_as_html(fig)
-                        st.success(f"Plot saved as {filepath}")
+                # Close the plot interface
+                st.session_state.show_plot_interface = False
+                st.session_state.plot_suggestion = None
+                
+                # Add to chat history
+                plot_description = f"Created {plot_type} plot: {x_column}" + (f" vs {y_column}" if y_column else "")
+                st.session_state.chat_history.append({
+                    "role": "assistant", 
+                    "content": f"✅ {plot_description}\n\nPlot is now displayed in the visualization area."
+                })
+                
+                st.success(f"✅ Plot created successfully! Check the visualization area.")
+                st.rerun()
+            else:
+                st.error("Failed to create plot. Please check your data and column selection.")
                 
         except Exception as e:
             st.error(f"Error creating plot: {str(e)}")
@@ -363,6 +480,12 @@ class ChatToExcelApp:
         """Reset application state"""
         st.session_state.data_loaded = False
         st.session_state.chat_history = []
+        st.session_state.excel_data = None
+        st.session_state.excel_filename = None
+        st.session_state.excel_columns = []
+        st.session_state.show_plot_interface = False
+        st.session_state.plot_suggestion = None
+        st.session_state.current_plot = None
         
         # Reset handlers
         self.excel_handler = ExcelHandler()

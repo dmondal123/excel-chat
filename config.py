@@ -17,9 +17,9 @@ class Config:
     PROMPTS_DIR = "prompts"
     
     # LLM Settings
-    DEFAULT_MODEL = "llama3-8b-8192"  # Fast Groq model
-    MAX_TOKENS = 1500
-    TEMPERATURE = 0.7
+    DEFAULT_MODEL = "openai/gpt-oss-20b"  # Fast Groq model
+    MAX_TOKENS = 15000
+    TEMPERATURE = 0.2
     
     # UI Settings
     PAGE_TITLE = "Chat to Excel"
